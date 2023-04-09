@@ -1,6 +1,6 @@
 # Revenant  
 
-Revenant is a 3rd party agent for Havoc written in C, and based on Talon. This implant is meant to expand on the Talon implant by implementing covert methods of execution, robust capabilities, and more customization.
+Revenant is a 3rd party agent for Havoc written in C, and based on Talon. This implant is meant to expand on the Talon implant by implementing covert methods of execution and modern evasive techniques.
 
 This project aims to be a self-contained Havoc C2 implant. The goal end-user functionality is as follows:
 
