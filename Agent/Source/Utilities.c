@@ -3,7 +3,7 @@
 //
 
 #include <windows.h>
-
+#include "Config.h"
 void *mem_set(void *dest, int value, size_t count)
 {
     unsigned char *p = dest;
@@ -160,4 +160,27 @@ wchar_t* wide_concat(const wchar_t* str1, const wchar_t* str2) {
     mem_cpy_w(result + len1, str2, len2);
     result[len] = L'\0';
     return result;
+}
+
+int str_cmp(const char *s1, const char *s2) {
+    int i = 0;
+    while (s1[i] == s2[i]) {
+        if (s1[i] == '\0') {
+            return 0;
+        }
+        i++;
+    }
+    return s1[i] - s2[i];
+}
+
+unsigned char* obfuscate_usage(unsigned char* arr, size_t arr_size) {
+    for (size_t i = 0; i < arr_size; i++) {
+        arr[i]++;   // increment the value of the current item
+    }
+
+    for (size_t i = 0; i < arr_size; i++) {
+        arr[i]--;   // decrement the value of the current item
+    }
+
+    return arr;
 }

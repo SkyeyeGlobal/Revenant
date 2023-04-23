@@ -11,18 +11,19 @@ This project aims to be a self-contained Havoc C2 implant. The goal end-user fun
 5) ???
 6) PROFIT
 
+  > Win7/8 Compatability:  
+  > - Disable NativeAPI  
 
-TODO:
+> TODO:
+> - Add additional commands
+> - Obfuscate WinAPI calls when "Obfuscation" enabled
+> - Encrypt/Obf Config.h
+> - Decrease entropy  
 
-[x] Develop Revenant handler to build executable  
-[x] Develop Revenant.py to handle options  
-[x] Implement string obfuscation  
-[x] Turn off print statements in release build  
-[-] Write Revenant with maximum native API  
-[ ] Develop Double Fork -> Run method  
-[ ] Develop PSBit method
 
-![Revnt](https://user-images.githubusercontent.com/22229087/221742449-acd2862d-db89-4272-b07c-e9431734a7fc.png)
+
+![IMG_0314](https://user-images.githubusercontent.com/22229087/233796939-96a6100e-bcfc-4d4a-b1cb-c9eacdea6bf9.PNG)
+
 
 
 The original Talon description can be found below.

@@ -1,11 +1,19 @@
 //
-// Created by 0xtriboulet on 3/25/2023.
+// Created by 0xtriboulet on 4/21/2023.
 //
 
 #ifndef REVENANT_ASM_H
 #define REVENANT_ASM_H
+#include <windows.h>
+#include "Config.h"
 
-extern void *get_ntdll_32();
-extern void *get_ntdll_64();
+#if CONFIG_ARCH == 64
+PVOID get_ntdll_64();
+
+#else
+PVOID get_ntdll_32();
+
+#endif
+
 
 #endif //REVENANT_ASM_H
