@@ -4,35 +4,41 @@ Revenant is a 3rd party agent for Havoc written in C, and based on Talon. This i
 
 This project aims to be a self-contained Havoc C2 implant. The goal end-user functionality is as follows:
 
-1) Download repo
-2) Unzip Revenant.zip
-3) Go to root folder
-4) Execute python Revenant.py
-5) ???
-6) PROFIT
+### Setup
+> 1) Download repo
+> 2) Unzip Revenant.zip
+> 3) Go to root folder
+> 4) Execute python Revenant.py
+> 5) ???
+> 6) PROFIT
 
-  > Win7/8 Compatability:  
-  > - Disable NativeAPI  
+  > **x86 and Win7/8 Compatability:**  
+  > - Disable NativeAPI
+  >>Note: Currently Revenant uses NtCreateUserProcess to deliver NativeAPI functionality. NtCreateUserProcess is not supported by x86 or Win7/8.
 
-> TODO:
-> - Add additional commands
-> - Obfuscate WinAPI calls when "Obfuscation" enabled
-> - Encrypt/Obf Config.h
-> - Decrease entropy  
+### Commands
+> - **pwsh** - executes commands through powershell.exe -> pwsh ls
+> - **shell** - executes commands through cmd.exe       -> shell dir  
+> - **download** - downloads file to loot folder        -> download C:\test.txt   
+> - **upload** - uploads file to desired folder         -> upload /home/test.txt C:\temp\test.txt  
+> - **exit** - kills current implant                    -> exit
+
+### Options
+> - **Sleep** - Set sleep in seconds  
+> - **Polymorphic** - Enable/Disable polymorphism at build and run time
+> - **Obfuscation** - Obfuscate strings with XOR
+> - **Arch** - x86/x64
+> - **Native** - Use NativeAPI where implemented
+> - **AntiDbg** - Leverage antidebug checks at initialization
+> - **RandCmdIDs** - Randomize command IDs  
+> - **Unhooking** - Perun's Fart method to unhook, exec command, then rehook 
+>> Note: RandCmdIDs randomizes the CmdIDs in the output executable. Revenant does **NOT** store these random CmdIDs; these will only work with the active session. If you want a reusable executable, do **NOT** enable this option.
+
+### TODO:
+> - Add exec-assembly
+> - Add cd, ls, whoami commands
+> - Decrease entropy
 
 
 
 ![IMG_0314](https://user-images.githubusercontent.com/22229087/233796939-96a6100e-bcfc-4d4a-b1cb-c9eacdea6bf9.PNG)
-
-
-
-The original Talon description can be found below.
-
--------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-Talon is a 3rd party agent for Havoc written in C. It's very minimalistic and it's meant to show how to work with the Havoc service api.
-Talon.py is the script that handles callbacks, register reqeuest and tasks by interacting with the Havoc service api. 
-
-![Payload Generator](Assets/PayloadGenerator.png)
-![Havoc Talon Interacted](Assets/HavocTalonInteract.png)
-

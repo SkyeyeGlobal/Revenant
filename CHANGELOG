@@ -1,0 +1,37 @@
+CHANGELOG 3JULY23 v0.59.5:
+> Improved polymorphism, removed most exceptions to dynamic poly
+> Added more hash definitions in support of future functionality
+> Random inline assembly injections break up function blocks for resilience against analysis
+> Unhooking via Perun's Fart method during command execution
+>> Unhooks before command execution, rehooks after execution
+>> 64-bit and 32-bit support for unhooking
+
+CHANGELOG 21MAY23 v0.59.4:
+> Architecture part of default name (Revenant_x64/x86.exe)
+> Cleaned up types in Utilities.c
+> Cleaned up Poly.c
+
+CHANGELOG 20MAY23 v0.59.3:
+> (HAVOC) submit solution candidate for 3rd party agent health monitoring
+>> https://github.com/HavocFramework/Havoc/issues/311
+> Fixed bugs where architecture of OS was not properly enumerated
+> Replace debugging methods in Command.c ; Poly.c
+
+CHANGELOG 19MAY23 v0.59.2:
+> Replace debugging methods in AntiDebug.c
+
+CHANGELOG 18MAY23 v0.59.1:
+> Consolidating debugging methods (dbg.h)
+
+CHANGELOG 14MAY23 v0.59:
+> Added powershell command (pwsh)
+> Fixed polymorphic issue on Linux builds
+> Fixed memory leaks
+
+CHANGELOG 2MAY23 v0.55:
+> Revenant is now packaged with llvm-clang/llvm-mingw
+> Reworked polymorphic functionality to support llvm
+> Protection against Mandiant's FLOSS
+> Implemented antidebug and runtime polymorphism prior to main()
+> Bug fixes and codebase cleanup
+> Implemented CHANGELOG

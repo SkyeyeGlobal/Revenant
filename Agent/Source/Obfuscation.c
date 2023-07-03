@@ -1,34 +1,44 @@
 //
 // Created by 0xtriboulet on 3/25/2023.
 //
-#include "Obfuscation.h"
+#include "Poly.h"
 #include "Utilities.h"
+#include "Obfuscation.h"
 
 #include <windows.h>
 
-wchar_t *str_to_wide(const char* ascii) {
-    size_t ascii_len = str_len(ascii);
-    size_t wide_len = mbstowcs(NULL, ascii, ascii_len);
-    if (wide_len == (size_t)-1)
+WCHAR* str_to_wide(CONST CHAR* ascii) {
+
+    SIZE_T ascii_len = str_len(ascii);
+    SIZE_T wide_len = mbstowcs(NULL, ascii, ascii_len);
+    if (wide_len == (SIZE_T)-1)
         return NULL;
 
-    wchar_t *wide = (wchar_t *)malloc((wide_len + 1) * sizeof(wchar_t));
+    WCHAR *wide = (WCHAR *)LocalAlloc(LPTR, (wide_len + 1) * sizeof(wchar_t));
     mbstowcs(wide, ascii, wide_len + 1);
     wide[wide_len] = L'\0';
     return wide;
 }
 
-char *xor_dec(char *_s, size_t _s_len, const char *_k, size_t _k_len) {
-    for (size_t i = 0; i < _s_len; i++) _s[i] ^= _k[i % _k_len];
-    return _s;
+VOID xor_dec (CONST CHAR* input, CHAR* output, CONST CHAR* key, SIZE_T size) {
+    SIZE_T length = size;
+    INT key_len = str_len(key);
+
+    for (int i = 0; i < length; i++) {
+        output[i] = input[i] ^ key[i % key_len];
+    }
+    // _tprintf("input: %s\n", input);
+    // _tprintf("output: %s\n", output);
+    output[length] = '\0';
+
 }
 
-uint32_t crc32b(const uint8_t *str) {
-    uint32_t crc = 0xFFFFFFFF;
-    uint32_t byte;
-    uint32_t mask;
-    int i = 0x0;
-    int j;
+UINT32 crc32b(CONST UINT8* str) {
+    UINT32 crc = 0xFFFFFFFF;
+    UINT32 byte;
+    UINT32 mask;
+    INT i = 0x0;
+    INT j;
 
     while (str[i] != 0) {
         byte = str[i];
@@ -43,22 +53,22 @@ uint32_t crc32b(const uint8_t *str) {
 }
 
 
-void *get_proc_address_by_hash(void *dll_address, uint32_t function_hash) {
-    void *base = dll_address;
+VOID* GetProcAddressByHash(VOID* dll_address, UINT32 function_hash) {
+    VOID* base = dll_address;
     PIMAGE_DOS_HEADER dos_header = (PIMAGE_DOS_HEADER)base;
     PIMAGE_NT_HEADERS nt_headers = (PIMAGE_NT_HEADERS)((DWORD_PTR)base + dos_header->e_lfanew);
     PIMAGE_EXPORT_DIRECTORY export_directory = (PIMAGE_EXPORT_DIRECTORY)((DWORD_PTR)base + nt_headers->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT].VirtualAddress);
-    unsigned long *p_address_of_functions = (PDWORD)((DWORD_PTR)base + export_directory->AddressOfFunctions);
-    unsigned long *p_address_of_names = (PDWORD)((DWORD_PTR)base + export_directory->AddressOfNames);
-    unsigned short *p_address_of_name_ordinals = (PWORD)((DWORD_PTR)base + export_directory->AddressOfNameOrdinals);
+    ULONG* p_address_of_functions = (PDWORD)((DWORD_PTR)base + export_directory->AddressOfFunctions);
+    ULONG* p_address_of_names = (PDWORD)((DWORD_PTR)base + export_directory->AddressOfNames);
+    USHORT * p_address_of_name_ordinals = (PWORD)((DWORD_PTR)base + export_directory->AddressOfNameOrdinals);
 
-    for(unsigned long i = 0; i < export_directory->NumberOfNames; i++) {
+    for(ULONG i = 0; i < export_directory->NumberOfNames; i++) {
         LPCSTR p_function_name = (LPCSTR)((DWORD_PTR)base + p_address_of_names[i]);
-        unsigned short p_function_ordinal = (unsigned short)p_address_of_name_ordinals[i];
-        unsigned long p_function_address = (unsigned long)p_address_of_functions[p_function_ordinal];
+        USHORT p_function_ordinal = (USHORT)p_address_of_name_ordinals[i];
+        ULONG p_function_address = (ULONG)p_address_of_functions[p_function_ordinal];
 
         if(function_hash == HASH(p_function_name))
-            return (void *)((DWORD_PTR)base + p_function_address);
+            return (VOID *)((DWORD_PTR)base + p_function_address);
     }
     return NULL;
 }
